@@ -1,0 +1,60 @@
+import numpy as np
+import paho.mqtt.client as mqtt
+import time
+
+broker = "broker.emqx.io"
+port = 1883
+topic = "/coding/sim"
+
+class MQTTSubscriber:
+    def __init__(self, broker, port, topic):
+        self.broker = broker
+        self.port = port
+        self.topic = topic
+        self.data_list = []
+
+    def on_message(self, client, userdata, msg):
+        try:
+            print("Receiving data")
+            data = msg.payload.decode('utf-8').split('#')
+            self.data_list.append([float(d) for d in data])
+        except Exception as e:
+            print(f"Error parsing MQTT message: {e}")
+
+    def save_to_numpy(self):
+        if self.data_list:
+            t_data, x_data, y_data, vx_data, vy_data = zip(*self.data_list)
+            return np.array(t_data), np.array(x_data), np.array(y_data), np.array(vx_data), np.array(vy_data)
+        else:
+            print("No data to save")
+            return None
+
+    def mqtt_sub(self):
+        client = mqtt.Client()
+        client.on_connect = self.on_connect
+        client.on_message = self.on_message
+        client.connect(self.broker, self.port, 10)
+        client.subscribe(self.topic, qos=2)
+        client.loop_start()
+        return client
+
+    def on_connect(self, client, userdata, flags, rc):
+        if rc == 0:
+            print("Connected to MQTT Broker!")
+        else:
+            print(f"Failed to connect, return code {rc}")
+
+    def main(self):
+        try:
+            client = self.mqtt_sub()
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("Program interrupted by user")
+        finally:
+            t_array, x_array, y_array, vx_array, vy_array = self.save_to_numpy()
+            print("Data saved to numpy arrays")
+
+if __name__ == '__main__':
+    mqtt_subscriber = MQTTSubscriber(broker, port, topic)
+    mqtt_subscriber.main()
